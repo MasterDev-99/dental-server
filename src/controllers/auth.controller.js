@@ -52,8 +52,7 @@ exports.googleLogin = async (req, res) => {
       user = await prisma.user.create({
         data: {
           email,
-          name: resolvedName,        // ✅ REQUIRED BY PRISMA
-          fullName: resolvedName,    // optional, if you want both
+          name: resolvedName,
           profileImage: picture || null,
           role: 'PATIENT',
           isActive: true,
