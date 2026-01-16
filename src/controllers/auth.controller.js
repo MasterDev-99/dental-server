@@ -46,12 +46,16 @@ exports.googleLogin = async (req, res) => {
     if (!user) {
       // You might want to create the user automatically
       // Or redirect to a signup completion page
+      
+      const resolvedName = name || email.split('@')[0];
+
       user = await prisma.user.create({
         data: {
           email,
-          fullName: name || email.split('@')[0],
+          name: resolvedName,        // ✅ REQUIRED BY PRISMA
+          fullName: resolvedName,    // optional, if you want both
           profileImage: picture || null,
-          role: 'PATIENT', // Default role or get from frontend
+          role: 'PATIENT',
           isActive: true,
           emailVerified: true,
         },
@@ -60,14 +64,14 @@ exports.googleLogin = async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { 
-        id: user.id, 
+      {
+        id: user.id,
         role: user.role,
-        email: user.email 
-      }, 
-      JWT_SECRET, 
-      { 
-        expiresIn: '24h' 
+        email: user.email
+      },
+      JWT_SECRET,
+      {
+        expiresIn: '24h'
       }
     );
 
