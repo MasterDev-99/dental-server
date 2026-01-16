@@ -46,7 +46,7 @@ exports.googleLogin = async (req, res) => {
     if (!user) {
       // You might want to create the user automatically
       // Or redirect to a signup completion page
-      
+
       const resolvedName = name || email.split('@')[0];
 
       user = await prisma.user.create({
@@ -90,7 +90,7 @@ exports.googleLogin = async (req, res) => {
       user: {
         id: user.id,
         email: user.email,
-        fullName: user.fullName,
+        name: user.name,
         role: user.role,
         profileImage: user.profileImage,
       },
