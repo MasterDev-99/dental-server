@@ -16,34 +16,107 @@ function generateToken(user) {
 exports.googleLogin = async (req, res) => {
   const { idToken } = req.body;
 
+  // Validate input
+  if (!idToken) {
+    return res.status(400).json({
+      success: false,
+      message: "idToken is required",
+    });
+  }
+
   try {
+    // Verify Firebase token
     const decoded = await admin.auth().verifyIdToken(idToken);
-    const { email } = decoded;
+    const { email, name, picture, email_verified } = decoded;
 
-    const user = await prisma.user.findUnique({ where: { email } });
-
-    if (!user) {
-      // User exists in Firebase, but not in DB
-      return res.status(200).json({
-        success: true,
-        alreadyExists: false,
-        message: "User not found in DB",
+    // Check if email is verified by Google
+    if (!email_verified) {
+      return res.status(403).json({
+        success: false,
+        message: "Email not verified by Google",
       });
     }
 
-    const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
+    // Check if user exists in database
+    let user = await prisma.user.findUnique({ where: { email } });
 
+    const isNewUser = !user;
+
+    // Create user if doesn't exist (optional - depends on your flow)
+    if (!user) {
+      // You might want to create the user automatically
+      // Or redirect to a signup completion page
+      user = await prisma.user.create({
+        data: {
+          email,
+          fullName: name || email.split('@')[0],
+          profileImage: picture || null,
+          role: 'PATIENT', // Default role or get from frontend
+          isActive: true,
+          emailVerified: true,
+        },
+      });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        id: user.id, 
+        role: user.role,
+        email: user.email 
+      }, 
+      JWT_SECRET, 
+      { 
+        expiresIn: '24h' 
+      }
+    );
+
+    // Set HTTP-only cookie (optional but more secure)
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    });
+
+    // Return response
     return res.status(200).json({
       success: true,
-      alreadyExists: true,
-      result: { token, user },
+      isNewUser, // Let frontend know if this is a new user
+      message: isNewUser ? "User created successfully" : "Login successful",
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        profileImage: user.profileImage,
+      },
+      token: token, // Still return token for mobile/SPA if needed
     });
 
   } catch (error) {
     console.error("Google login error:", error);
-    return res.status(401).json({
+
+    // Handle specific Firebase errors
+    if (error.code === 'auth/id-token-expired') {
+      return res.status(401).json({
+        success: false,
+        message: "Google token has expired",
+      });
+    }
+
+    if (error.code === 'auth/argument-error') {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Google token format",
+      });
+    }
+
+    // Generic error
+    return res.status(500).json({
       success: false,
-      message: "Invalid Firebase token",
+      message: "Authentication failed",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 };

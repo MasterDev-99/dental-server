@@ -14,3 +14,4 @@ yarn-error.log
 
 # Other files you want to ignore, for example:
 # .DS_Store
+.vercel
